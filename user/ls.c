@@ -10,7 +10,7 @@ fmtname(char *path)
   char *p;
 
   // Find first character after last slash.
-  for(p=path+strlen(path); p >= path && *p != '/'; p--)
+  for(p=path+strlen(path); p >= path && *p != '/'; p--)//path传入的是一个“地址”，所以+strlen(path)
     ;
   p++;
 

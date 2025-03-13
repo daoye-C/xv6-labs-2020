@@ -4,6 +4,7 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
 
+//为了便于理解，将数字取个别名
 // Parsed command representation
 #define EXEC  1
 #define REDIR 2
@@ -135,7 +136,7 @@ getcmd(char *buf, int nbuf)
 {
   fprintf(2, "$ ");
   memset(buf, 0, nbuf);
-  gets(buf, nbuf);
+  gets(buf, nbuf);//上一行将文件进行了初始化为 0 ，这一行读入，下一行是判断是否有参数读入，有返回 0 ，没有返回 -1
   if(buf[0] == 0) // EOF
     return -1;
   return 0;
@@ -157,11 +158,11 @@ main(void)
 
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){
-    if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
+    if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){ // 这里的含义是 判断是否是 cd
       // Chdir must be called by the parent, not the child.
-      buf[strlen(buf)-1] = 0;  // chop \n
-      if(chdir(buf+3) < 0)
-        fprintf(2, "cannot cd %s\n", buf+3);
+      buf[strlen(buf)-1] = 0;  // chop \n   就是去掉结尾的 \n 
+      if(chdir(buf+3) < 0)// 也就是跳过“cd ”这三个字符！！！也就是从目录开始！成功则返回 0 ，失败返回 -1
+        fprintf(2, "cannot cd %s\n", buf+3); //标准输入输出流！！！2 为标准错误
       continue;
     }
     if(fork1() == 0)
