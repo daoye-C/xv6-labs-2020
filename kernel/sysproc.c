@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -95,3 +96,34 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64 // 为什么是uint64？这就是最终执行的系统调用的函数！！！
+sys_trace(void)
+{
+  int mask;
+  
+  if(argint(0, &mask) < 0) 
+    return -1;
+  
+  myproc()->syscall_trace = mask;
+  return 0;
+}
+
+uint64
+sys_sysinfo(void)
+{
+  struct sysinfo  info;
+  
+  count_freemem(&info.freemem);
+  count_process(&info.nproc);
+
+  uint64 addr;
+  if(argaddr(0, &addr) < 0) //获取用户态的一个地址
+    return -1;
+  
+  if(copyout(myproc()->pagetable, addr, (char*)&info, sizeof (info)) < 0)//从内核态读出struct sysinfo   char*就是一个字节一个字节
+    return -1;
+
+  return 0;
+}
+

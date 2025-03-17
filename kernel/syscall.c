@@ -104,8 +104,12 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
+extern uint64 sys_trace(void); //lab2 system call
+extern uint64 sys_sysinfo(void); // lab2 systemcall
 
-static uint64 (*syscalls[])(void) = {
+
+// system call table
+static uint64 (*syscalls[])(void) = { //语法 ： [下标] 元素  这样的是一个数组在对应下标位置存储 该元素 ，其余位置置为 0 
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
 [SYS_wait]    sys_wait,
@@ -127,6 +131,34 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_trace]   sys_trace, //lab2 system call    
+[SYS_sysinfo] sys_sysinfo, // lab2 system call
+};
+
+const char *syscall_names[] = { //自定义的一个系统调用数组！！！
+[SYS_fork]    "fork",
+[SYS_exit]    "exit",
+[SYS_wait]    "wait",
+[SYS_pipe]    "pipe",
+[SYS_read]    "read",
+[SYS_kill]    "kill",
+[SYS_exec]    "exec",
+[SYS_fstat]   "fstat",
+[SYS_chdir]   "chdir",
+[SYS_dup]     "dup",
+[SYS_getpid]  "getpid",
+[SYS_sbrk]    "sbrk",
+[SYS_sleep]   "sleep",
+[SYS_uptime]  "uptime",
+[SYS_open]    "open",
+[SYS_write]   "write",
+[SYS_mknod]   "mknod",
+[SYS_unlink]  "unlink",
+[SYS_link]    "link",
+[SYS_mkdir]   "mkdir",
+[SYS_close]   "close",
+[SYS_trace]   "trace",
+[SYS_sysinfo] "sysinfo",
 };
 
 void
@@ -138,6 +170,11 @@ syscall(void)
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     p->trapframe->a0 = syscalls[num]();
+
+    if( p->syscall_trace >> num & 1)
+      printf("%d: syscall %s -> %d\n", p->pid, syscall_names[num], p->trapframe->a0);
+
+
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);

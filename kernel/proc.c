@@ -127,6 +127,8 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->syscall_trace = 0; // lab2 system call trace 
+
   return p;
 }
 
@@ -290,6 +292,8 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+
+  np->syscall_trace = p->syscall_trace; // lab2 system call  trace 
 
   pid = np->pid;
 
@@ -692,4 +696,14 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+void
+count_process(uint64* value)
+{
+  *value = 0;
+  for(struct proc* p = proc; p < &proc[NPROC]; p++)//proc是一个数组记录了所有的进程 ，所以从数组开始遍历
+    if(p->state != UNUSED)
+      (*value) ++; //注意优先级问题，这里的* 优先级比++ 低，如果没有括号就成为了一个移动指针的过程
+  
 }

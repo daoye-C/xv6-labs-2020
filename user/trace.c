@@ -14,14 +14,24 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  if (trace(atoi(argv[1])) < 0) {
-    fprintf(2, "%s: trace failed\n", argv[0]);
+  if (trace(atoi(argv[1])) < 0) { // the trace here is a system call 
+    fprintf(2, "%s: trace failed\n", argv[0]); 
     exit(1);
   }
   
-  for(i = 2; i < argc && i < MAXARG; i++){
+  for(i = 2; i < argc && i < MAXARG; i++){ // 这是
     nargv[i-2] = argv[i];
   }
-  exec(nargv[0], nargv);
+  exec(nargv[0], nargv);// 跟踪的命令 ，nargv读取的时候只会从第1个开始
   exit(0);
 }
+
+
+/* 系统调用trace  格式： 
+  trace <mask> <命令> <命令的参数>
+
+  |----------|
+
+  参数1 参数2
+
+*/
