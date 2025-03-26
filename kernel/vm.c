@@ -74,15 +74,15 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   if(va >= MAXVA)
     panic("walk");
 
-  for(int level = 2; level > 0; level--) {
-    pte_t *pte = &pagetable[PX(level, va)];
+  for(int level = 2; level > 0; level--) {  // 从二级到一级页表 深入
+    pte_t *pte = &pagetable[PX(level, va)];  // 找对应的页表项  这里&是得到起始地址  []是偏移量  PX是计算其虚拟页号 level是索引的层级
     if(*pte & PTE_V) {
       pagetable = (pagetable_t)PTE2PA(*pte);
-    } else {
+    } else {                                  //如果是不存在， 分配一个页面
       if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
         return 0;
       memset(pagetable, 0, PGSIZE);
-      *pte = PA2PTE(pagetable) | PTE_V;
+      *pte = PA2PTE(pagetable) | PTE_V;  // 完成对 PTE_V 修改置为1
     }
   }
   return &pagetable[PX(0, va)];
@@ -115,7 +115,7 @@ walkaddr(pagetable_t pagetable, uint64 va)
 // only used when booting.
 // does not flush TLB or enable paging.
 void
-kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
+kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)  // 根据kvminit传入的参数来看 perm 是传入读写权限
 {
   if(mappages(kernel_pagetable, va, sz, pa, perm) != 0)
     panic("kvmmap");
@@ -153,7 +153,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
-  for(;;){
+  for(;;){ // 不断地循环 建立起 va和pa的映射 通过 walk将va对应的pte找到 然后存入对应物理
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
     if(*pte & PTE_V)
@@ -439,4 +439,40 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+void
+vmprint_assistance(pagetable_t pagetable, int level)
+{
+
+  int num = 3 - level;
+
+  // there are 2^9 = 512 PTEs in a page table. 
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+
+    if((pte & PTE_V) && ((pte & (PTE_R | PTE_W | PTE_X)) == 0)) 
+    {
+      uint64 child = PTE2PA(pte);
+      printf("..");
+     if(num == 2) printf(" ..");
+      printf("%d: pte %p pa %p\n", i, (void*)pte, (void*)child);
+      vmprint_assistance((pagetable_t)child, level - 1);
+    }
+    else if(pte & PTE_V)
+    {
+      uint64 pa = PTE2PA(pte);
+      
+      printf(".. .. ..%d: pte %p pa %p\n", i, (void*)pte, (void*)pa);
+    }
+
+  }
+  
+}
+
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", (void*)pagetable);  // 首行打印参数
+  vmprint_assistance(pagetable, 2);
 }

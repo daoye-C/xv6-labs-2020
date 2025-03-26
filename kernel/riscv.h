@@ -335,7 +335,7 @@ sfence_vma()
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
 
-#define PTE2PA(pte) (((pte) >> 10) << 12)
+#define PTE2PA(pte) (((pte) >> 10) << 12)  // 这是PTE 的各种标志位在低10位 与与PTE的存储有关
 
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
 
