@@ -126,13 +126,13 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)  // 根据kvminit传入的参�
 // addresses on the stack.
 // assumes va is page aligned.
 uint64
-kvmpa(uint64 va)
+kvmpa(pagetable_t pgtbl, uint64 va)  // lab3 增加一个参数 pagetable_t pgtbl
 {
   uint64 off = va % PGSIZE;
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pte = walk(pgtbl, va, 0);
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -176,11 +176,11 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   uint64 a;
   pte_t *pte;
 
-  if((va % PGSIZE) != 0)
+  if((va % PGSIZE) != 0)   // 按页对齐
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
-    if((pte = walk(pagetable, a, 0)) == 0)
+    if((pte = walk(pagetable, a, 0)) == 0)  // 注意 walk是找到一个可指向物理页面的pte 
       panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0)
       panic("uvmunmap: not mapped");
@@ -295,7 +295,7 @@ void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
   if(sz > 0)
-    uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
+    uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1); // 取消映射 释放物理内存
   freewalk(pagetable);
 }
 
@@ -441,6 +441,8 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   }
 }
 
+
+// 下面是lab3的内容
 void
 vmprint_assistance(pagetable_t pagetable, int level)
 {
@@ -476,3 +478,111 @@ vmprint(pagetable_t pagetable)
   printf("page table %p\n", (void*)pagetable);  // 首行打印参数
   vmprint_assistance(pagetable, 2);
 }
+
+
+// 给process 的内核页表特供
+void 
+pk_kvmmap(pagetable_t pk_pagetable, uint64 va, uint64 pa, uint64 sz, int perm)  // 根据kvminit传入的参数来看 perm 是传入读写权限
+{
+  if(mappages(pk_pagetable, va, sz, pa, perm) != 0)
+    panic("pk_kvmmap");
+}
+
+/*
+ * create a new page table for every process 
+ */
+pagetable_t      
+pk_kvminit()
+{
+  // process kernel pagetbale
+  pagetable_t pk_pagetable = (pagetable_t) kalloc();
+  memset(pk_pagetable, 0, PGSIZE);
+
+  // 这下面这的代码为什么要设置我不太理解  等后面再继续深入吧！0327
+  // uart registers
+  pk_kvmmap(pk_pagetable, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  pk_kvmmap(pk_pagetable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+
+  // CLINT
+  pk_kvmmap(pk_pagetable, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+
+  // PLIC
+  pk_kvmmap(pk_pagetable, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+
+  // map kernel text executable and read-only.
+  pk_kvmmap(pk_pagetable, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  pk_kvmmap(pk_pagetable, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  pk_kvmmap(pk_pagetable, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+
+  return pk_pagetable;
+}
+
+
+void
+pk_freewalk(pagetable_t pagetable)
+{
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    uint64 child = PTE2PA(pte);
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0)
+    {
+      pk_freewalk((pagetable_t)child);
+      pagetable[i] = 0;
+    } 
+  }
+  kfree((void*)pagetable);
+}
+
+// void
+// kvmunmap(pagetable_t pagetable, uint64 va, uint64 npages)
+// {
+//   uint64 a;
+//   pte_t *pte;
+
+//   if((va % PGSIZE) != 0)   // 按页对齐
+//     panic("kvmunmap: not aligned");
+
+//   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+//     if((pte = walk(pagetable, a, 0)) == 0)  // 注意 walk是找到一个可指向物理页面的pte 
+//       panic("kvmunmap: walk");
+//     if((*pte & PTE_V) == 0)
+//       panic("kvmunmap: not mapped");
+//     if(PTE_FLAGS(*pte) == PTE_V)
+//       panic("kvmunmap: not a leaf");
+//     *pte = 0;
+//   }
+// }  X
+
+
+// void
+// kvmfree(pagetable_t pagetable)
+// {
+//   kvmunmap(pagetable, 0, 1); // 取消映射 释放物理内存
+//   pk_freewalk(pagetable);
+// }  X
+
+// 可以直接更改原来的函数，但是如果不看解析和参考别人的解法 ，我想不到会在 磁盘的文件中该对应的函数
+// 虽然只要执行就可以发现问题
+// uint64
+// pk_kvmpa(pagetable_t pagetable,uint64 va)
+// {
+//   uint64 off = va % PGSIZE;
+//   pte_t *pte;
+//   uint64 pa;
+  
+//   pte = walk(pagetable, va, 0);
+//   if(pte == 0)
+//     panic("pk_kvmpa");
+//   if((*pte & PTE_V) == 0)
+//     panic("pk_kvmpa");
+//   pa = PTE2PA(*pte);
+//   return pa+off;
+// }

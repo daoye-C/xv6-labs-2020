@@ -49,11 +49,11 @@
 
 // map the trampoline page to the highest address,
 // in both user and kernel space.
-#define TRAMPOLINE (MAXVA - PGSIZE)
+#define TRAMPOLINE (MAXVA - PGSIZE)   // 这是高位，从该位置到 MAXVA 是放置trampoline的页面
 
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
-#define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)
+#define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)  // 这里*2的原因是 每个页表之间都 捡个漏一个guard page
 
 // User memory layout.
 // Address zero first:
@@ -64,4 +64,4 @@
 //   ...
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
-#define TRAPFRAME (TRAMPOLINE - PGSIZE)
+#define TRAPFRAME (TRAMPOLINE - PGSIZE)  // 这里可以退出大致的结构，以及为什么上面的页面会空那么多
