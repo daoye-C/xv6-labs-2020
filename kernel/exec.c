@@ -107,7 +107,9 @@ exec(char *path, char **argv)
     if(*s == '/')
       last = s+1;
   safestrcpy(p->name, last, sizeof(p->name));
-    
+  
+  u2kvmcopy(pagetable, p->pk_pagetable, 0, sz); // 这些参数为什么是这样 看下面的这段代码
+
   // Commit to the user image.
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;

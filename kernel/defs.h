@@ -184,6 +184,7 @@ void            pk_kvmmap(pagetable_t pk_pagetable, uint64 va, uint64 pa, uint64
 pagetable_t     pk_kvminit(void);      
 void            pk_freewalk(pagetable_t );
 // uint64          pk_kvmpa(pagetable_t, uint64);
+void             u2kvmcopy(pagetable_t, pagetable_t, uint64, uint64);
 
 
 // plic.c
@@ -229,4 +230,9 @@ void            sockclose(struct sock *);
 int             sockread(struct sock *, uint64, int);
 int             sockwrite(struct sock *, uint64, int);
 void            sockrecvudp(struct mbuf*, uint32, uint16, uint16);
+
+
+
 #endif
+
+
