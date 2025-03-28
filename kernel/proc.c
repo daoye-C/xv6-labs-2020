@@ -23,25 +23,27 @@ extern char trampoline[]; // trampoline.S
 
 // initialize the proc table at boot time.
 void
-procinit(void)
+procinit(void)  // 初始化进程表
 {
   struct proc *p;
   
   initlock(&pid_lock, "nextpid");
-  for(p = proc; p < &proc[NPROC]; p++) {
-      initlock(&p->lock, "proc");
+  for(p = proc; p < &proc[NPROC]; p++) { // proc是进程数组 ，也就是进程表
+      initlock(&p->lock, "proc");  // 对每个进程的lock进行初始化
 
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      
+      // lab3 将功能迁移至allocproc
+      // char *pa = kalloc();
+      // if(pa == 0)
+      //   panic("kalloc");
+      // uint64 va = KSTACK((int) (p - proc));  
+      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);  // 这里建立映射
+      // p->kstack = va;
   }
-  kvminithart();
+  kvminithart();   // 从直接物理地址切换为分页模式 但是这里的目的是为了使用最新的页表映射
 }
 
 // Must be called with interrupts disabled,
@@ -120,6 +122,21 @@ found:
     release(&p->lock);
     return 0;
   }
+  // An empty kernel page table.
+  p->pk_pagetable = pk_kvminit();
+  // if(p->pagetable == 0){
+  //   freeproc(p);
+  //   release(&p->lock);
+  //   return 0;
+  // }     lab3  X
+
+  // 将内核栈映射到内核表
+  char *pa = kalloc();
+  if(pa == 0)
+    panic("kalloc");
+  uint64 va = KSTACK((int) 0);   // 不同进程的同一地址指向不同物理地址
+  pk_kvmmap(p->pk_pagetable, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);  // 这里建立映射  原先没有加上p->pk_pagetable 使用了原先的参数和函数
+  p->kstack = va;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -141,6 +158,7 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -150,10 +168,22 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
+  
+  // 内核栈释放
+  void* kernel_stack = (void*) kvmpa(p->pk_pagetable, p->kstack);
+  kfree(kernel_stack);
+  p->kstack = 0;
+
+  // 释放页表
+  pk_freewalk(p->pk_pagetable);
+  p->pk_pagetable = 0;
+
+  p->state = UNUSED;
 }
 
 // Create a user page table for a given process,
-// with no user memory, but with trampoline pages.
+// with no user memory, but with trampoline pages.   trampoline->"蹦床"  （机制） 从用户态 经过 “蹦床” 弹到 内核态  代码在trampoline.S中
 pagetable_t
 proc_pagetable(struct proc *p)
 {
@@ -168,8 +198,8 @@ proc_pagetable(struct proc *p)
   // at the highest user virtual address.
   // only the supervisor uses it, on the way
   // to/from user space, so not PTE_U.
-  if(mappages(pagetable, TRAMPOLINE, PGSIZE,
-              (uint64)trampoline, PTE_R | PTE_X) < 0){
+  if(mappages(pagetable, TRAMPOLINE, PGSIZE,   // 这里的TRAMPOLINE是一个va 在memlayout.h中定义
+              (uint64)trampoline, PTE_R | PTE_X) < 0){  // 这里的trampoline 是文件前面的char [] 是文件trampoline.S中写的,在C中这里的trampoline实际就是指向数组首地址的指针
     uvmfree(pagetable, 0);
     return 0;
   }
@@ -194,6 +224,7 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
 }
+
 
 // a user program that calls exec("/init")
 // od -t xC initcode
@@ -473,8 +504,14 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        
+        w_satp(MAKE_SATP(p->pk_pagetable));
+        sfence_vma();                     // lab3
+
         swtch(&c->context, &p->context);
 
+        kvminithart();  // 切回全局页面    lab3  revised
+        
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
@@ -487,6 +524,7 @@ scheduler(void)
     if(found == 0) {
       intr_on();
       asm volatile("wfi");
+      //kvminithart();  //lab3  X
     }
 #else
     ;

@@ -108,6 +108,7 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+void            proc_free_pk_pagetable(pagetable_t pagetable);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -160,7 +161,7 @@ int             uartgetc(void);
 // vm.c
 void            kvminit(void);
 void            kvminithart(void);
-uint64          kvmpa(uint64);
+uint64          kvmpa(pagetable_t, uint64);
 void            kvmmap(uint64, uint64, uint64, int);
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
 pagetable_t     uvmcreate(void);
@@ -178,7 +179,12 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
-void            vmprint(pagetable_t);
+void            vmprint(pagetable_t);  // lab3  pte 
+void            pk_kvmmap(pagetable_t pk_pagetable, uint64 va, uint64 pa, uint64 sz, int perm);  // lab3 kernel pagetable per process
+pagetable_t     pk_kvminit(void);      
+void            pk_freewalk(pagetable_t );
+// uint64          pk_kvmpa(pagetable_t, uint64);
+
 
 // plic.c
 void            plicinit(void);
