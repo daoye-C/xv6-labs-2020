@@ -244,13 +244,15 @@ userinit(void)
 {
   struct proc *p;
 
-  p = allocproc();
+  p = allocproc();  // 这里隐含了创建页表
   initproc = p;
   
   // allocate one user page and copy init's instructions
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
+
+  u2kvmcopy(p->pagetable, p->pk_pagetable, 0, p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -274,11 +276,15 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    if( PGROUNDUP(sz + n) >= PLIC)   // 不能直接写 sz+n 这样没有对齐到页 
+      return -1;
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    u2kvmcopy(p->pagetable, p->pk_pagetable, sz-n, sz);
   } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
+    sz = uvmdealloc(p->pagetable, sz, sz + n); // n < 0
+    // 缩小不同步的原因是 p->sz 会在逻辑上 忽略后面的 pte
   }
   p->sz = sz;
   return 0;
@@ -299,12 +305,14 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0  ){
     freeproc(np);
     release(&np->lock);
     return -1;
   }
   np->sz = p->sz;
+
+  u2kvmcopy(np->pagetable, np->pk_pagetable, 0, np->sz);
 
   np->parent = p;
 
@@ -504,7 +512,7 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-        
+
         w_satp(MAKE_SATP(p->pk_pagetable));
         sfence_vma();                     // lab3
 
