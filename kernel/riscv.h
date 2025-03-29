@@ -352,3 +352,16 @@ sfence_vma()
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
+
+//////// lab4 /////
+
+static inline uint64
+r_fp()   // 读取s0寄存器
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x) );
+  return x;
+}
+
+
+///////1ab4/////
