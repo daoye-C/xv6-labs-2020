@@ -121,6 +121,7 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  backtrace();
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -132,3 +133,30 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+
+//////////////////////// lab4 backtrace //////
+void
+backtrace()  // 回溯函数调用栈   每个栈一个页面
+{
+  uint64 fp = r_fp(); // 读取当前s0的值
+
+
+  uint64 stack_base = PGROUNDDOWN(fp);
+  uint64 stack_top = PGROUNDUP(fp);  // 这里得出的是上一个页面的起始地址也就是比当前栈的最高地址的下一地址
+
+  printf("backtrace:\n");
+
+  while(fp >= stack_base && fp < stack_top) 
+  {
+    uint64 pre_fp, rd;
+
+    pre_fp = *(uint64*)(fp - 16); // 取出其中的内容而不是直接是地址
+    rd = *(uint64*)(fp -8);
+    printf("%p\n", (void*)rd);
+    
+    fp = pre_fp;
+  }
+}
+
+///////// lab4  backtrace /////
