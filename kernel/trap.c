@@ -78,7 +78,19 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
+  { 
+    ///////// lab4 /////
+    if(p->alarm_interval != 0 && ++ p->tracecall_interval == p->alarm_interval && p->alarm_on == 0)
+    {
+      memmove(p->alarm_frame, p->trapframe, sizeof(struct trapframe));
+      p->trapframe->epc = (uint64)p->alarm_handler;
+      p->tracecall_interval = 0;
+      p->alarm_on = 1;
+    }
+    ///////// lab4 /////
     yield();
+  }
+
 
   usertrapret();
 }

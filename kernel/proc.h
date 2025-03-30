@@ -103,4 +103,11 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  int alarm_interval;          // sigalarm  lab4  多久报警
+  void (*alarm_handler)();     // sigalarm  lab4
+  int tracecall_interval;      // 跟踪自上次调用到进程的报警处理程序间的ticks lab4
+  struct trapframe *alarm_frame;
+  int alarm_on;                // 是否有handler正在运行
+
 };
