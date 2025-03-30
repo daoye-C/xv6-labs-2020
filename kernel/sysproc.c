@@ -98,3 +98,28 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+
+///////// lab4 /////
+
+// (int ticks, void (*handler)())// 第二个参数传入的是一个函数 且返回为 void
+
+uint64
+sys_sigalarm(void)
+{
+  if(argint(0, &myproc()->alarm_interval) < 0 || argaddr(1, (uint64*)&myproc()->alarm_handler) < 0)
+    return -1;
+
+  return 0;
+}
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc* p = myproc();
+  memmove(p->trapframe, p->alarm_frame, sizeof(struct trapframe));
+  p->alarm_on = 0;
+  return 0;
+}
+
+///////// lab4 /////
