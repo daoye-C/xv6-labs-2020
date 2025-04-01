@@ -171,6 +171,12 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+int             lazy_uvmalloc(pagetable_t, uint64); // lab5
+int             lazy_risk(pagetable_t, uint64);
+// void            lazy_uvmalloc(uint64);
+// int             lazy_risk(uint64);
+
+
 
 // plic.c
 void            plicinit(void);
