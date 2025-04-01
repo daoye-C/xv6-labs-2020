@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -180,10 +182,18 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+    // if((pte = walk(pagetable, a, 0)) == 0)
+    //   panic("uvmunmap: walk");
+    // if((*pte & PTE_V) == 0)         // lazy allocation 会导致释放的页可能是 无效
+    //   panic("uvmunmap: not mapped");
+
+    ///////// lab5 /////
+
     if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+      continue;
+    if((*pte & PTE_V) == 0)  // 无需关心是否仍然在pagetable内 或sz 内如果有问题，则原来的实现方式也会出问题
+      continue;
+    ///////// lab5 /////
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -314,10 +324,18 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
+    // if((pte = walk(old, i, 0)) == 0)
+    //   panic("uvmcopy: pte should exist");
+    // if((*pte & PTE_V) == 0)
+    //   panic("uvmcopy: page not present");
+    ///////// lab5 /////
+
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+      continue;
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      continue;
+
+    ///////// lab5 ////
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -356,6 +374,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
 
+
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
@@ -381,6 +400,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
   uint64 n, va0, pa0;
 
+
   while(len > 0){
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
@@ -405,6 +425,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
+
   uint64 n, va0, pa0;
   int got_null = 0;
 
@@ -440,3 +461,50 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+
+////////// lab5 //////
+int
+lazy_uvmalloc(pagetable_t pgtbl, uint64 va)
+{
+  va = PGROUNDDOWN(va);
+  char *mem = kalloc();
+  if(mem == 0) {
+    // failed to allocate physical memory
+    printf("lazy alloc: out of memory\n");
+    return -1;
+
+  } else {
+    memset(mem, 0, PGSIZE);
+    if(mappages(pgtbl, va , PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+      printf("lazy alloc: failed to map page\n");
+      kfree(mem);
+      return -1;
+      }
+  }
+  // printf("lazy alloc: %p, p->sz: %p\n", PGROUNDDOWN(va), p->sz);
+  return 0;
+}
+
+
+int
+lazy_risk(pagetable_t pgtbl, uint64 va)
+{
+  pte_t *pte;
+
+  if(((pte = walk(pgtbl, va, 0)) == 0) || ((*pte & PTE_V) ==0))
+    return 1;
+  return 0;
+}
+
+// int 
+// lazy_risk(uint64 va)
+// {
+//   struct proc* p = myproc();
+//   pte_t* pte;
+
+//   return va < p->sz && PGROUNDDOWN(va) != r_sp() && (((pte = walk(p->pagetable, va, 0)) == 0) || ((*pte & PTE_V) ==0 ));  
+// }
+
+
+///////// lab5 //////

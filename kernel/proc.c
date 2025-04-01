@@ -248,8 +248,13 @@ growproc(int n)
     }
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    p->sz = sz;
   }
-  p->sz = sz;
+  else 
+  {
+    return -1;
+  }
+  
   return 0;
 }
 

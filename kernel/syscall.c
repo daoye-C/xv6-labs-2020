@@ -68,6 +68,14 @@ int
 argaddr(int n, uint64 *ip)
 {
   *ip = argraw(n);
+  
+  ///////// lab5 /////
+  struct proc* p = myproc();
+  if(*ip < p->sz && *ip != r_sp() && lazy_risk(p->pagetable, *ip))
+    lazy_uvmalloc(p->pagetable, *ip);
+
+  ///////// lab5 /////
+
   return 0;
 }
 
