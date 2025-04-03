@@ -10,15 +10,40 @@
 #define STACK_SIZE  8192
 #define MAX_THREAD  4
 
+//---------lab7---
+
+// copy from kernel/proc.h
+struct context {
+  uint64 ra;
+  uint64 sp;
+
+  // callee-saved
+  uint64 s0;
+  uint64 s1;
+  uint64 s2;
+  uint64 s3;
+  uint64 s4;
+  uint64 s5;
+  uint64 s6;
+  uint64 s7;
+  uint64 s8;
+  uint64 s9;
+  uint64 s10;
+  uint64 s11;
+};
+
+
+//---------lab7---
 
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
+  struct context context;       /* used to preserve thread status*/
 
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
-extern void thread_switch(uint64, uint64);
+extern void thread_switch(struct context* old, struct context* new);
               
 void 
 thread_init(void)
@@ -39,11 +64,11 @@ thread_schedule(void)
 
   /* Find another runnable thread. */
   next_thread = 0;
-  t = current_thread + 1;
-  for(int i = 0; i < MAX_THREAD; i++){
-    if(t >= all_thread + MAX_THREAD)
-      t = all_thread;
-    if(t->state == RUNNABLE) {
+  t = current_thread + 1;         // 在 init 中初始化了 current_thread 
+  for(int i = 0; i < MAX_THREAD; i++){ // 只循环 MAX_THREAD 刚好遍历完
+    if(t >= all_thread + MAX_THREAD) // all_thread是所有线程的索引 
+      t = all_thread;                // 循环执行
+    if(t->state == RUNNABLE) {       // 反复寻找runnable
       next_thread = t;
       break;
     }
@@ -63,6 +88,12 @@ thread_schedule(void)
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
+
+    //---------lab7---
+    thread_switch(&t->context, &current_thread->context);
+
+    //---------lab7---
+
   } else
     next_thread = 0;
 }
@@ -77,6 +108,12 @@ thread_create(void (*func)())
   }
   t->state = RUNNABLE;
   // YOUR CODE HERE
+  //---------lab7---
+  t->context.ra = (uint64)func;  // 将执行指针放到func就可以执行该程序
+
+  t->context.sp = (uint64)&t->stack + (STACK_SIZE - 1);
+
+  //---------lab7---
 }
 
 void 
