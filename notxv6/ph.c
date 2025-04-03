@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
-#include <pthread.h>
+#include <pthread.h>  // 这是外部库
 #include <sys/time.h>
 
 #define NBUCKET 5
@@ -16,6 +16,7 @@ struct entry {
 struct entry *table[NBUCKET];
 int keys[NKEYS];
 int nthread = 1;
+pthread_mutex_t lock[NBUCKET]; // declare a lock
 
 double
 now()
@@ -40,6 +41,7 @@ void put(int key, int value)
 {
   int i = key % NBUCKET;
 
+  pthread_mutex_lock(&lock[i]);
   // is the key already present?
   struct entry *e = 0;
   for (e = table[i]; e != 0; e = e->next) {
@@ -51,8 +53,11 @@ void put(int key, int value)
     e->value = value;
   } else {
     // the new is new.
+    //pthread_mutex_lock(&lock); // acquire lock  01 
     insert(key, value, &table[i], table[i]);
+    //pthread_mutex_unlock(&lock); // release lock 01
   }
+  pthread_mutex_unlock(&lock[i]);
 }
 
 static struct entry*
@@ -102,6 +107,10 @@ main(int argc, char *argv[])
   pthread_t *tha;
   void *value;
   double t1, t0;
+
+  //pthread_mutex_init(&lock, NULL); // initialize the lock  01
+  for(int i = 0; i < NBUCKET; i++ )
+    pthread_mutex_init(&lock[i], NULL);
 
   if (argc < 2) {
     fprintf(stderr, "Usage: %s nthreads\n", argv[0]);
