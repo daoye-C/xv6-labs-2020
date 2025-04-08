@@ -376,31 +376,61 @@ iunlockput(struct inode *ip)
 // If there is no such block, bmap allocates one.
 static uint
 bmap(struct inode *ip, uint bn)
-{
-  uint addr, *a;
-  struct buf *bp;
+{ 
+  uint addr, *a, *a2;
+  struct buf *bp, *bp2;
 
-  if(bn < NDIRECT){
+  if(bn < NDIRECT){ // 直接块
     if((addr = ip->addrs[bn]) == 0)
       ip->addrs[bn] = addr = balloc(ip->dev);
     return addr;
   }
-  bn -= NDIRECT;
+  bn -= NDIRECT; // 逻辑间接块号
 
-  if(bn < NINDIRECT){
+  if(bn < NINDIRECT){ // 一级间接块
     // Load indirect block, allocating if necessary.
-    if((addr = ip->addrs[NDIRECT]) == 0)
+    if((addr = ip->addrs[NDIRECT]) == 0) // NDIRECT放置一级间接索引，在新的文件系统中，这里是二级间接索引的位置
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
-    bp = bread(ip->dev, addr);
+    bp = bread(ip->dev, addr);  // 返回一个在buffer cache中的buf块
     a = (uint*)bp->data;
     if((addr = a[bn]) == 0){
       a[bn] = addr = balloc(ip->dev);
       log_write(bp);
     }
-    brelse(bp);
+    brelse(bp);  // 释放cache块
     return addr;
   }
+    
+  //---lab9---
+  bn -= NINDIRECT; // 在二级中的逻辑块号
+  if(bn < NINDIRECT2){
+    if((addr = ip->addrs[NDIRECT+1]) == 0)
+      ip->addrs[NDIRECT+1] = addr = balloc(ip->dev); // 拿到了二级的索引   二级索引 -->>  一级索引  -->>  物理磁盘
+    bp2 = bread(ip->dev, addr);
+    a2 = (uint*)bp2->data;
 
+    uint bn2 = bn / NINDIRECT;
+    bn -= bn2*NINDIRECT;
+
+    if((addr = a2[bn2]) == 0)  // 取一级索引块
+    {
+      a2[bn2] = addr = balloc(ip->dev);
+      log_write(bp2);
+    }
+    brelse(bp2);
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[bn]) == 0)
+    {
+      a[bn] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    
+    return addr;
+  }
+  //---lab9---
+  
   panic("bmap: out of range");
 }
 
@@ -410,8 +440,8 @@ void
 itrunc(struct inode *ip)
 {
   int i, j;
-  struct buf *bp;
-  uint *a;
+  struct buf *bp, *bp2;
+  uint *a, *a2;
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
@@ -430,6 +460,27 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  if(ip->addrs[NDIRECT+1])
+  {
+    bp2 = bread(ip->dev, ip->addrs[NDIRECT+1]);
+    a2 = (uint*)bp2->data;
+    for(i = 0; i < NINDIRECT; i ++){
+      if(a2[i]){
+        bp = bread(ip->dev, a2[i]);
+        a = (uint*)bp->data;
+        for(j = 0; j < NINDIRECT; j ++){
+          if(a[j])
+            bfree(ip->dev, a[j]);
+        }
+        brelse(bp);
+        bfree(ip->dev, a2[i]);
+      }
+    }
+    brelse(bp2);
+    bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    ip->addrs[NDIRECT+1] = 0;
   }
 
   ip->size = 0;
@@ -604,17 +655,17 @@ skipelem(char *path, char *name)
 
   while(*path == '/')
     path++;
-  if(*path == 0)
+  if(*path == 0)   // 为空
     return 0;
   s = path;
   while(*path != '/' && *path != 0)
     path++;
-  len = path - s;
-  if(len >= DIRSIZ)
+  len = path - s;  // 获取当前目录名
+  if(len >= DIRSIZ)  // 如果比DIRSIZ大 也只迁移DIRSIZ
     memmove(name, s, DIRSIZ);
   else {
     memmove(name, s, len);
-    name[len] = 0;
+    name[len] = 0; // 增加终止符号
   }
   while(*path == '/')
     path++;
