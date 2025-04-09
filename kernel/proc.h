@@ -81,6 +81,22 @@ struct trapframe {
 };
 
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+//---lab10---
+#define MAX_VMA 16
+struct VMA_area{
+  struct file *file;      // 指向对应的文件的struct file 
+
+  uint64      vaddr;      // 虚拟起始地址
+  int         size;       // 文件长度
+  int         flags;      // 标志位
+  int         prot;       // 权限
+  int         vfd;        // 文件描述符
+
+  int         used;       // 使用状态
+  int         offset;     // 偏移量
+};
+
+//---lab10---
 
 // Per-process state
 struct proc {
@@ -103,4 +119,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  struct VMA_area VMA[MAX_VMA];  
 };
