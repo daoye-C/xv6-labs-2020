@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 
+
 struct spinlock tickslock;
 uint ticks;
 
@@ -28,6 +29,8 @@ trapinithart(void)
 {
   w_stvec((uint64)kernelvec);
 }
+
+
 
 //
 // handle an interrupt, exception, or system call from user space.
@@ -67,7 +70,28 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  }
+  //---lab10---
+  /*
+    先区分是什么  13是读  15是写导致页缺失
+  */
+  else if(r_scause() == 13 || r_scause() == 15) // 页面错误的情况
+  {
+#ifdef LAB_MMAP
+    uint64 faddr = r_stval();
+    if(PGROUNDUP(p->trapframe->sp) - 1 < faddr && faddr < p->sz)
+    {
+      if(mmap_deal(faddr, r_scause()) != 0) 
+        p->killed = 1;
+    }
+    else 
+      p->killed =1;
+#endif
+  }
+
+  //---lab10---
+
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
@@ -217,4 +241,5 @@ devintr()
     return 0;
   }
 }
+
 

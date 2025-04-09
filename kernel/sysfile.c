@@ -484,3 +484,164 @@ sys_pipe(void)
   }
   return 0;
 }
+
+
+//---lab10---
+
+
+uint64
+sys_mmap(void)
+{
+  uint64 err = 0xffffffffffffffff;
+  uint64 vaddr;
+  int size;
+  int prot;
+  int flags;
+  int offset;
+  int vfd;
+  struct file* vfile;
+
+  // 读取参数
+  if(argaddr(0, &vaddr) < 0 || argint(1, &size) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argfd(4, &vfd, &vfile) < 0
+    || argint(5, &offset) < 0)
+    return err;
+
+  if(vaddr != 0 || offset != 0 || size < 0  )
+    return err;
+  
+  // 权限检查
+  if(vfile->writable == 0 && (prot & PROT_WRITE) != 0 && flags == MAP_SHARED )
+    return err;
+
+  struct proc* p = myproc();
+  if(p->sz + size > MAXVA)
+    return err;
+  
+  for(int i = 0; i < MAX_VMA; i ++)
+  {
+    if(p->VMA[i].used == 0)
+    {
+      p->VMA[i].used = 1;
+
+      p->VMA[i].vaddr = p->sz;
+      p->VMA[i].size = size;
+      p->VMA[i].prot = prot;
+      p->VMA[i].flags = flags;
+      p->VMA[i].vfd = vfd;
+      p->VMA[i].file = vfile;
+      p->VMA[i].offset = offset;
+
+      filedup(vfile);
+
+      p->sz += size;
+      return p->VMA[i].vaddr;
+    }
+  }
+  
+  return err;
+
+}
+
+//munmap(addr, length)
+uint64
+sys_munmap(void)
+{
+  uint64 va;
+  int len;
+  int i;
+
+
+  // 读取参数
+  if(argaddr(0, &va) < 0 || argint(1, &len) < 0)
+    return -1;
+  
+  struct proc* p = myproc();
+
+  for(i = 0; i < MAX_VMA; i ++ )
+  {
+    if(p->VMA[i].used == 1 && p->VMA[i].size >= len && p->VMA[i].vaddr <= va && va < p->VMA[i].vaddr + p->VMA[i].size)
+    {
+      if(va == p->VMA[i].vaddr)
+      {
+        p->VMA[i].vaddr += len;
+        p->VMA[i].size -= len;
+      }
+      else{
+        p->VMA[i].size -= len;
+      }
+      break;
+    }
+  }
+
+  if(i == MAX_VMA)
+    return -1;
+
+  if(p->VMA[i].flags == MAP_SHARED && (p->VMA[i].prot & PROT_WRITE) !=0 )
+    filewrite(p->VMA[i].file, va, len);
+
+  uvmunmap(p->pagetable, PGROUNDDOWN(va), len / PGSIZE , 1); // void 类型
+
+  if(p->VMA[i].size == 0)
+  {
+    fileclose(p->VMA[i].file);
+    p->VMA[i].used = 0;
+  }
+
+  
+  return 0;
+
+}
+
+int 
+mmap_deal(uint64 va, uint cause)
+{
+  struct proc* p = myproc();  
+  int i;
+  for(i = 0; i < MAX_VMA; i++)// 如何知道是哪个VMA的问题？
+  {
+    if(p->VMA[i].used && va < p->VMA[i].vaddr + p->VMA[i].size && va >= p->VMA[i].vaddr)
+      break;
+  }
+
+  if(i == MAX_VMA)
+    return -1;
+
+  // 标志位
+  int pte_flags = PTE_U;
+  if(p->VMA[i].prot & PROT_READ) pte_flags |= PTE_R;
+  if(p->VMA[i].prot & PROT_WRITE) pte_flags |= PTE_W;
+  if(p->VMA[i].prot & PROT_EXEC) pte_flags |= PTE_X;
+
+  struct file* file = p->VMA[i].file;
+  if(cause == 13 && file->readable == 0) return -1;
+  if(cause == 15 && file->writable == 0) return -1;
+
+  void* pa = kalloc();  // 分配一页物理内存
+  if(pa == 0 ) 
+    return -1;
+  memset(pa, 0 ,PGSIZE);
+
+
+  ilock(file->ip);
+  int offset = p->VMA[i].offset + PGROUNDDOWN(va - p->VMA[i].vaddr);
+  int readbytes = readi(file->ip, 0, (uint64)pa, offset, PGSIZE); 
+
+  if(readbytes == 0)
+  {
+    iunlock(file->ip);
+    kfree(pa);
+    return -1;
+  }
+  iunlock(file->ip);
+
+  if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)pa, pte_flags ) != 0)
+  {
+    kfree(pa);
+    return -1;
+  }
+
+  return 0;
+}
+
+
+//---lab10---
